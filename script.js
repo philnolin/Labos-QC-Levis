@@ -444,6 +444,26 @@ function extraireAcideUrique(texte) {
 }
 
 function extraireVitB12(texte) {
+    const lignes = texte.split(/\r?\n/);
+    for (let i = 0; i < lignes.length; i++) {
+        if (!/VITAMINE B-?12|Vitamine B12/i.test(lignes[i])) continue;
+
+        const memeLigne = lignes[i].match(/([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*pmol\/L/i);
+        if (memeLigne && memeLigne[1]) return normaliserValeur(memeLigne[1]);
+
+        for (let j = 1; j <= 10; j++) {
+            const index = i - j;
+            if (index < 0) break;
+            const ligne = lignes[index].trim();
+            if (!ligne) continue;
+            if (/Normal|Déficient|neurologique|h[ée]matologique|Page|Rapport|Légende/i.test(ligne)) continue;
+            if (/:/.test(ligne)) continue;
+
+            const match = ligne.match(/^([<>]?(?:=)?\d+(?:[.,]\d+)?)(?:\s*[HLBA])?\s*pmol\/L\b/i);
+            if (match && match[1]) return normaliserValeur(match[1]);
+        }
+    }
+
     const patterns = [
         /VITAMINE B-12\s*(\d+[.,]?\d*)\s*pmol\/L/i,
         /(\d+[.,]?\d*)\s*pmol\/L[\s\S]{0,500}?VITAMINE B-12/i,
@@ -459,7 +479,7 @@ function extraireVitB12(texte) {
         if (match && match[1]) return normaliserValeur(match[1]);
     }
 
-    return extractValueNearAnchor(texte, /VITAMINE B-?12|Vitamine B12/i, 10);
+    return null;
 }
 
 function extraireVitD(texte) {
