@@ -201,6 +201,53 @@ function extraireHb(texte) {
     return null;
 }
 
+function extraireVGM(texte) {
+    const patterns = [
+        /\bVGM\b\s*(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*fL\b/i,
+        /Volume glob\.\s*moyen\s*(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*fL\b/i,
+        /\bVGM\b[^\n]*?AUTO[VHBCAX]*\s*([<>]?(?:=)?\d+(?:[.,]\d+)?)/i
+    ];
+
+    for (const pattern of patterns) {
+        const match = texte.match(pattern);
+        if (match && match[1]) return normaliserValeur(match[1]);
+    }
+
+    return extractValueNearAnchor(texte, /\bVGM\b|Volume glob\.\s*moyen/i, 6);
+}
+
+function extraireCreatinine(texte) {
+    const patterns = [
+        /Cr[ée]atinine\s*(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*[uµμ](?:mol|M)\/L\b/i,
+        /CREATININE\s*(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*[uµμ](?:mol|M)\/L\b/i,
+        /Cr[ée]atinine[^\n]*?AUTO[VHBCAX]*\s*([<>]?(?:=)?\d+(?:[.,]\d+)?)/i
+    ];
+
+    for (const pattern of patterns) {
+        const match = texte.match(pattern);
+        if (match && match[1]) return normaliserValeur(match[1]);
+    }
+
+    return extractValueNearAnchor(texte, /Cr[ée]atinine|CREATININE/i, 6);
+}
+
+function extraireHemolysePotassium(texte) {
+    const lignePotassium = texte.match(/Potassium[^\n]*/i);
+    const zoneRecherche = lignePotassium
+        ? texte.substring(
+            Math.max(0, (lignePotassium.index || 0) - 250),
+            Math.min(texte.length, (lignePotassium.index || 0) + lignePotassium[0].length + 250)
+        )
+        : texte;
+
+    const match = zoneRecherche.match(/h[ée]molyse\s*(\d)\+/i);
+    if (!match || !match[1]) return "";
+
+    const niveau = parseInt(match[1], 10);
+    if (Number.isNaN(niveau) || niveau <= 0) return "";
+    return "+".repeat(Math.min(niveau, 3));
+}
+
 function extraireCT(texte) {
     let m = texte.match(/Cholest[ée]rol\s+total\s*[HB]?\s*([\d,.]+)\s*mmol\/L/i);
     if (m) return normaliserValeur(m[1]);
@@ -745,14 +792,16 @@ function processRapport(texte) {
             extraireParUnite(texte, "Hb|Hémoglobine", "g\\/L", /(?:Hb|H[ée]moglobine)\s+(\d+)\s/i, fb("Hb|Hémoglobine", "g\\/L")) ||
             extraireFormatCompactRef(texte, "Hb|Hémoglobine", "g\\/L") ||
             extractValue(texte, /(?:Hb|H[ée]moglobine)\s+(\d+)\s/i),
-        VGM: extraireParUnite(texte, "VGM|Volume glob\\. moyen", "fL", /Volume glob\. moyen\s+(\d+[.,]\d+|\d+)\s/i, fb("VGM|Volume glob\\. moyen", "fL")) ||
+        VGM: extraireVGM(texte) ||
+            extraireParUnite(texte, "VGM|Volume glob\\. moyen", "fL", /Volume glob\. moyen\s+(\d+[.,]\d+|\d+)\s/i, fb("VGM|Volume glob\\. moyen", "fL")) ||
             extraireFormatCompactRef(texte, "VGM|Volume glob\\. moyen", "fL") ||
             extractValue(texte, /\bVGM\b\s+(?:[HLBA]\s*)?(\d+[.,]\d+|\d+)\s*fL/i),
         DVE: extraireParUnite(texte, "DVE|Indice dist\\. érythrocytaire", "%", /Indice dist\. érythrocytaire\s+(\d+[.,]\d+|\d+)\s/i, fb("DVE|Indice dist\\. érythrocytaire", "%")) ||
             extraireFormatCompactRef(texte, "DVE|Indice dist\\. érythrocytaire", "%") ||
             extractValue(texte, /\bDVE\b\s+(?:[HLBA]\s*)?(\d+[.,]\d+|\d+)\s*%/i),
         RNI: extraireRNI(texte),
-        "Créat": extraireParUnite(texte, "Cr[ée]atinine|CREATININE", "[uµμ](?:mol|M)\\/L", /CREATININE\s+(\d+)\s/i, fb("Cr[ée]atinine|CREATININE", "[uµμ](?:mol|M)\\/L")) ||
+        "Créat": extraireCreatinine(texte) ||
+            extraireParUnite(texte, "Cr[ée]atinine|CREATININE", "[uµμ](?:mol|M)\\/L", /CREATININE\s+(\d+)\s/i, fb("Cr[ée]atinine|CREATININE", "[uµμ](?:mol|M)\\/L")) ||
             extraireFormatCompactRef(texte, "Cr[ée]atinine|CREATININE", "[uµμ](?:mol|M)\\/L") ||
             extractValue(texte, /Cr[ée]atinine\s+(?:[HLBA]\s*)?(\d+)\s*[uµμ](?:mol|M)\/L/i) ||
             extractValue(texte, /CREATININE\s+(\d+)\s/i),
@@ -761,9 +810,9 @@ function processRapport(texte) {
         Na: extraireParUnite(texte, "Sodium|SODIUM", "mmol\\/L", /SODIUM\s+(\d+)\s/i, fb("Sodium|SODIUM", "mmol\\/L")) ||
             extraireFormatCompactRef(texte, "Sodium|SODIUM", "mmol\\/L") ||
             extractValue(texte, /SODIUM\s+(\d+)\s/i),
-        K: extraireParUnite(texte, "Potassium|POTASSIUM", "mmol\\/L", /POTASSIUM\s+(\d+[.,]\d+|\d+)\s/i, fb("Potassium|POTASSIUM", "mmol\\/L")) ||
+        K: ((extraireParUnite(texte, "Potassium|POTASSIUM", "mmol\\/L", /POTASSIUM\s+(\d+[.,]\d+|\d+)\s/i, fb("Potassium|POTASSIUM", "mmol\\/L")) ||
             extraireFormatCompactRef(texte, "Potassium|POTASSIUM", "mmol\\/L") ||
-            extractValue(texte, /POTASSIUM\s+(\d+[.,]\d+|\d+)\s/i),
+            extractValue(texte, /POTASSIUM\s+(\d+[.,]\d+|\d+)\s/i)) || null),
         Cl: extraireParUnite(texte, "Chlor(?:ure|e)|CHLORURE", "mmol\\/L", /CHLORURE\s+(\d+)\s/i, fb("Chlor(?:ure|e)|CHLORURE", "mmol\\/L")) ||
             extraireFormatCompactRef(texte, "Chlor(?:ure|e)|CHLORURE", "mmol\\/L") ||
             extractValue(texte, /Chlor(?:ure|e)\s+(?:[HLBA]\s*)?(\d+[.,]\d+|\d+)\s*mmol\/L/i) ||
@@ -819,6 +868,11 @@ function processRapport(texte) {
         PSA: extractValue(texte, /PSA\s+(\d+[.,]\d+|\d+)\s/i),
         Li: extraireLiStrict(texte)
     };
+
+    const suffixeHemolysePotassium = extraireHemolysePotassium(texte);
+    if (valeurs.K && suffixeHemolysePotassium && !String(valeurs.K).endsWith(suffixeHemolysePotassium)) {
+        valeurs.K = `${valeurs.K}${suffixeHemolysePotassium}`;
+    }
 
     if (valeurs.Ca && valeurs.Alb) {
         const ca = parseFloat(valeurs.Ca);
