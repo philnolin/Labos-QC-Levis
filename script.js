@@ -217,18 +217,36 @@ function extraireVGM(texte) {
 }
 
 function extraireCreatinine(texte) {
+    const lignes = texte.split(/\r?\n/);
+    for (const ligneBrute of lignes) {
+        const ligne = ligneBrute.trim();
+        if (!/Cr[ée]atinine|CREATININE/i.test(ligne)) continue;
+        if (/\bmiction\b|urinaire|urine|mg\/mmolCRE/i.test(ligne)) continue;
+
+        let match = ligne.match(/(?:Cr[ée]atinine|CREATININE)\s*(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*[uµμ](?:mol|M)\/L\b/i);
+        if (match && match[1]) return normaliserValeur(match[1]);
+
+        match = ligne.match(/(?:Cr[ée]atinine|CREATININE)\s*(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s+(?:<=|>=)?\s*[\d,. -]+\s*[uµμ](?:mol|M)\/L\b/i);
+        if (match && match[1]) return normaliserValeur(match[1]);
+    }
+
     const patterns = [
         /Cr[ée]atinine\s*(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*[uµμ](?:mol|M)\/L\b/i,
         /CREATININE\s*(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*[uµμ](?:mol|M)\/L\b/i,
+        /Cr[ée]atinine\s*(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s+(?:<=|>=)?\s*[\d,. -]+\s*[uµμ](?:mol|M)\/L\b/i,
         /Cr[ée]atinine[^\n]*?AUTO[VHBCAX]*\s*([<>]?(?:=)?\d+(?:[.,]\d+)?)/i
     ];
 
     for (const pattern of patterns) {
         const match = texte.match(pattern);
-        if (match && match[1]) return normaliserValeur(match[1]);
+        if (match && match[1]) {
+            const contexte = texte.substring(Math.max(0, (match.index || 0) - 80), Math.min(texte.length, (match.index || 0) + 160));
+            if (/\bmiction\b|urinaire|urine|mg\/mmolCRE/i.test(contexte)) continue;
+            return normaliserValeur(match[1]);
+        }
     }
 
-    return extractValueNearAnchor(texte, /Cr[ée]atinine|CREATININE/i, 6);
+    return null;
 }
 
 function extraireHemolysePotassium(texte) {
