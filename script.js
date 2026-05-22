@@ -892,6 +892,8 @@ function processRapport(texte) {
         valeurs.K = `${valeurs.K}${suffixeHemolysePotassium}`;
     }
 
+    delete valeurs.GB;
+
     if (valeurs.Ca && valeurs.Alb) {
         const ca = parseFloat(valeurs.Ca);
         const alb = parseFloat(valeurs.Alb);
@@ -912,7 +914,7 @@ function formaterDVE(val) {
 
 function formaterResultat(date, valeurs, heure, cultureComplete) {
     const ordre = [
-        "GB", "Hb", "VGM", "DVE", "RNI", "Créat", "DFGe", "Urée", "Na", "K", "Cl", "Pi", "Mg",
+        "Hb", "VGM", "DVE", "RNI", "Créat", "DFGe", "Urée", "Na", "K", "Cl", "Pi", "Mg",
         "Alb", "Pré-alb", "Ca", "Ca (corr.)", "Ca ionisé", "Ac. urique",
         "BiliT", "ALT", "AST", "CK", "GGT", "LDH", "Phosp. Alc", "CRP",
         "CT", "TG", "HDL", "LDL", "non-HDL", "ApoB",
