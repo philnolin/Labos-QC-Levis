@@ -493,6 +493,98 @@ function extraireCK(texte) {
     return null;
 }
 
+function extraireGB(texte) {
+    let m = texte.match(/\bGB\b\s*(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*10\*9\/L/i);
+    if (m) return normaliserValeur(m[1]);
+
+    m = texte.match(/Globules blancs[^\n]*?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*10\*9\/L/i);
+    if (m) return normaliserValeur(m[1]);
+
+    return null;
+}
+
+function extraireLymphocytesAbs(texte) {
+    const lignes = texte.split(/\r?\n/);
+
+    for (const ligne of lignes) {
+        if (!/Lymphocytes/i.test(ligne)) continue;
+
+        const match = ligne.match(/Lymphocytes\s+(?:[HLBA]\s*)?[\d.,]+\s*\([^)]+\)\s+(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)/i);
+        if (match && match[1]) return normaliserValeur(match[1]);
+    }
+
+    let m = texte.match(/Lymphocytes[^\n]*?\b(?:absolu|absolue|abs)\b[^\d]*([<>]?(?:=)?\d+(?:[.,]\d+)?)/i);
+    if (m) return normaliserValeur(m[1]);
+
+    return null;
+}
+
+function extraireCRP(texte) {
+    let m = texte.match(/Prot[ée]ine C r[ée]active\s*\(CRP\)\s*(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*mg\/L/i);
+    if (m) return normaliserValeur(m[1]);
+
+    m = texte.match(/\bCRP\b\s*(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*mg\/L/i);
+    if (m) return normaliserValeur(m[1]);
+
+    return null;
+}
+
+function extraireGlucose(texte) {
+    let m = texte.match(/Glucose(?:\s+non\s+[àa]\s+jeun)?\s*(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*mmol\/L/i);
+    if (m) return normaliserValeur(m[1]);
+
+    m = texte.match(/\bGLUCOSE\b\s*(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)/i);
+    if (m) return normaliserValeur(m[1]);
+
+    return null;
+}
+
+function extraireTroponine(texte) {
+    let m = texte.match(/Troponine\s+I\s*([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*ng\/L/i);
+    if (m) return normaliserValeur(m[1]);
+
+    m = texte.match(/Troponine[^\n]*?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*ng\/L/i);
+    if (m) return normaliserValeur(m[1]);
+
+    return null;
+}
+
+function extraireBNP(texte) {
+    let m = texte.match(/(?:^|[^\w])BNP\s*(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*ng\/L/i);
+    if (m) return normaliserValeur(m[1]);
+
+    m = texte.match(/(?:^|[^\w])BNP\s*(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)(?!\s*roBNP)/i);
+    if (m) return normaliserValeur(m[1]);
+
+    return null;
+}
+
+function extraireComplement(texte, type) {
+    const regex = new RegExp(`Compl[ée]ment\\s+${type}\\s*(?:[HLBA]\\s*)?([<>]?(?:=)?\\d+(?:[.,]\\d+)?)\\s*g\\/L`, "i");
+    const match = texte.match(regex);
+    return match && match[1] ? normaliserValeur(match[1]) : null;
+}
+
+function extraireAntiADN(texte) {
+    let m = texte.match(/Anti-ADN\s*\(anti-DS-DNA\)\s*:\s*([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*UI\/mL/i);
+    if (m) return normaliserValeur(m[1]);
+
+    m = texte.match(/anti-DS-DNA[^\d]*([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*UI\/mL/i);
+    if (m) return normaliserValeur(m[1]);
+
+    return null;
+}
+
+function extraireCrithidia(texte) {
+    const m = texte.match(/Crithidia\s+luciliae\s*:\s*(positif|n[ée]gatif|[ée]quivoque)/i);
+    return m && m[1] ? m[1].toLowerCase() : null;
+}
+
+function extraireAntiENA(texte) {
+    const m = texte.match(/Ac\s+anti-ENA\s*\(d[ée]pistage\)\s*([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*Ratio/i);
+    return m && m[1] ? normaliserValeur(m[1]) : null;
+}
+
 function normaliserAntibiotique(nom) {
     const map = {
         "Nitrofurantoine": "Nitrofurantoïne",
@@ -648,6 +740,7 @@ function processRapport(texte) {
     ) || extractValue(texte, /CALCIUM TOTAL\s+(\d+[.,]\d+|\d+)/i);
 
     const valeurs = {
+        GB: extraireGB(texte),
         Hb: extraireHb(texte) ||
             extraireParUnite(texte, "Hb|Hémoglobine", "g\\/L", /(?:Hb|H[ée]moglobine)\s+(\d+)\s/i, fb("Hb|Hémoglobine", "g\\/L")) ||
             extraireFormatCompactRef(texte, "Hb|Hémoglobine", "g\\/L") ||
@@ -694,6 +787,7 @@ function processRapport(texte) {
         LDH: extraireParUnite(texte, "Lactate d[ée]shydrog[ée]nase(?:\\s*\\(LDH\\))?|LD\\s*\\(LDH\\)", "U\\/L", /LD\s+\(LDH\)\s+(\d+)\s/i, fb("Lactate d[ée]shydrog[ée]nase|LD\\s*\\(LDH\\)", "U\\/L")),
         "Phosp. Alc": extraireParUnite(texte, "Phosphatase alcaline(?:\\s*\\([^)]*\\))?|PHOSPHATASE ALCALINE", "U\\/L", /PHOSPHATASE ALCALINE\s+(\d+)\s/i, fb("Phosphatase alcaline|PHOSPHATASE ALCALINE", "U\\/L")) ||
             extractValue(texte, /Phosphatase alcaline\s+(?:[HLBA]\s*)?(\d+[.,]\d+|\d+)\s*U\/L/i),
+        CRP: extraireCRP(texte),
         CT: extraireCT(texte) || extractValue(texte, /CHOLESTEROL\s+(\d+[.,]\d+|\d+)\s/i),
         TG: extraireParUnite(texte, "Triglyc[ée]rides|TRIGLYCERIDES", "mmol\\/L", /TRIGLYCERIDES\s+(\d+[.,]\d+|\d+)\s/i, fb("Triglyc[ée]rides|TRIGLYCERIDES", "mmol\\/L")) ||
             extractValue(texte, /Triglyc[ée]rides\s+(?:[HLBA]\s*)?(\d+[.,]\d+|\d+)\s*mmol\/L/i) ||
@@ -720,7 +814,7 @@ function processRapport(texte) {
         RAC: extraireRAC(texte),
         TSAT: extraireTSAT(texte),
         Ferritine: extractValue(texte, /FERRITINE\s+(\d+)\s/i) || extraire(texte, /Ferritine[^\d-]*([\d,.]+)/i),
-        BNP: extractValue(texte, /BNP\s+(\d+[.,]\d+|\d+)\s/i),
+        BNP: extraireBNP(texte),
         NTproBNP: extraireParUnite(texte, "NTproBNP", "ng\\/L", /NTproBNP[^\d-]*([\d,.]+)\s*ng\/L/i),
         PSA: extractValue(texte, /PSA\s+(\d+[.,]\d+|\d+)\s/i),
         Li: extraireLiStrict(texte)
@@ -746,9 +840,9 @@ function formaterDVE(val) {
 
 function formaterResultat(date, valeurs, heure, cultureComplete) {
     const ordre = [
-        "Hb", "VGM", "DVE", "RNI", "Créat", "DFGe", "Urée", "Na", "K", "Cl", "Pi", "Mg",
+        "GB", "Hb", "VGM", "DVE", "RNI", "Créat", "DFGe", "Urée", "Na", "K", "Cl", "Pi", "Mg",
         "Alb", "Pré-alb", "Ca", "Ca (corr.)", "Ca ionisé", "Ac. urique",
-        "BiliT", "ALT", "AST", "CK", "GGT", "LDH", "Phosp. Alc",
+        "BiliT", "ALT", "AST", "CK", "GGT", "LDH", "Phosp. Alc", "CRP",
         "CT", "TG", "HDL", "LDL", "non-HDL", "ApoB",
         "TSH", "T4L", "Vit. B12", "Vit. D", "HbA1c", "RAC", "TSAT",
         "Ferritine", "BNP", "NTproBNP", "PSA", "Li"
