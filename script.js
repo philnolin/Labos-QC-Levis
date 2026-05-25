@@ -277,7 +277,10 @@ function extraireHemolysePotassium(texte) {
         )
         : texte;
 
-    const match = zoneRecherche.match(/h[ée]molyse\s*(\d)\+/i);
+    let match = zoneRecherche.match(/r[ée]sultat\s+surestim[ée]\s*(\+{1,3})/i);
+    if (match && match[1]) return match[1];
+
+    match = zoneRecherche.match(/h[ée]molyse\s*(\d)\+/i);
     if (!match || !match[1]) return "";
 
     const niveau = parseInt(match[1], 10);
@@ -427,18 +430,23 @@ function extraireMg(texte) {
 }
 
 function extraireAlbumine(texte) {
-    const patterns = [
-        /ALBUMINE\s+(\d+[.,]?\d*)\s*g\/L/i,
-        /Albumine[^\\d-]*(\d+[.,]?\d*)\s*g\/L/i,
-        /ALBUMINE\s+(\d+[.,]?\d*)\s/i
-    ];
+    const lignes = texte.split(/\r?\n/);
+    for (const ligneBrute of lignes) {
+        const ligne = ligneBrute.trim();
+        if (!/ALBUMINE|Albumine/i.test(ligne)) continue;
 
-    for (const pattern of patterns) {
-        const match = texte.match(pattern);
+        const match = ligne.match(/(?:ALBUMINE|Albumine)\s+(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*g\/L\b/i) ||
+            ligne.match(/(?:ALBUMINE|Albumine)\s+(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s+(?:<=|>=)?\s*[\d,. -]+\s*g\/L\b/i);
         if (match && match[1]) return normaliserValeur(match[1]);
     }
 
     return extraireParUnite(texte, "Albumine", "g\\/L", /Albumine[^\d-]*([\d,.]+)\s*g\/L/i, fb("Albumine", "g\\/L"));
+}
+
+function extrairePTH(texte) {
+    return extraireValeurSurLigne(texte, "PTH\\s*I-84|Parathormone", "ng\\/L") ||
+        extractValue(texte, /PTH\s*I-84\s+(?:[HLBA]\s*)?(\d+[.,]\d+|\d+)\s*ng\/L/i) ||
+        extractValue(texte, /Parathormone[\s\S]{0,80}?(\d+[.,]\d+|\d+)\s*ng\/L/i);
 }
 
 function extraireAcideUrique(texte) {
@@ -593,6 +601,14 @@ function extrairePhosphate(texte) {
         extraireParUnite(texte, "Phosph(?:ore|ate)|PHOSPHORE", "mmol\\/L", /PHOSPHORE\s+(\d+[.,]\d+|\d+)\s/i, fb("Phosph(?:ore|ate)|PHOSPHORE", "mmol\\/L")) ||
         extractValue(texte, /Phosph(?:ate|ore)\s+(?:[HLBA]\s*)?(\d+[.,]\d+|\d+)\s*mmol\/L/i) ||
         extractValue(texte, /PHOSPHORE\s+(\d+[.,]\d+|\d+)\s/i);
+}
+
+function extrairePotassium(texte) {
+    return extraireValeurSurLigne(texte, "Potassium|POTASSIUM", "mmol\\/L") ||
+        extractValue(texte, /Potassium\s+(?:[HLBA]\s*)?(\d+[.,]\d+|\d+)\s+(?:<=|>=)?\s*[\d,. -]+\s*mmol\/L/i) ||
+        extraireParUnite(texte, "Potassium|POTASSIUM", "mmol\\/L", /POTASSIUM\s+(\d+[.,]\d+|\d+)\s/i, fb("Potassium|POTASSIUM", "mmol\\/L")) ||
+        extraireFormatCompactRef(texte, "Potassium|POTASSIUM", "mmol\\/L") ||
+        extractValue(texte, /POTASSIUM\s+(\d+[.,]\d+|\d+)\s/i);
 }
 
 function extraireALT(texte) {
@@ -917,9 +933,7 @@ function processRapport(texte) {
         Na: extraireParUnite(texte, "Sodium|SODIUM", "mmol\\/L", /SODIUM\s+(\d+)\s/i, fb("Sodium|SODIUM", "mmol\\/L")) ||
             extraireFormatCompactRef(texte, "Sodium|SODIUM", "mmol\\/L") ||
             extractValue(texte, /SODIUM\s+(\d+)\s/i),
-        K: ((extraireParUnite(texte, "Potassium|POTASSIUM", "mmol\\/L", /POTASSIUM\s+(\d+[.,]\d+|\d+)\s/i, fb("Potassium|POTASSIUM", "mmol\\/L")) ||
-            extraireFormatCompactRef(texte, "Potassium|POTASSIUM", "mmol\\/L") ||
-            extractValue(texte, /POTASSIUM\s+(\d+[.,]\d+|\d+)\s/i)) || null),
+        K: (extrairePotassium(texte) || null),
         Cl: extraireParUnite(texte, "Chlor(?:ure|e)|CHLORURE", "mmol\\/L", /CHLORURE\s+(\d+)\s/i, fb("Chlor(?:ure|e)|CHLORURE", "mmol\\/L")) ||
             extraireFormatCompactRef(texte, "Chlor(?:ure|e)|CHLORURE", "mmol\\/L") ||
             extractValue(texte, /Chlor(?:ure|e)\s+(?:[HLBA]\s*)?(\d+[.,]\d+|\d+)\s*mmol\/L/i) ||
@@ -969,6 +983,7 @@ function processRapport(texte) {
         Ferritine: extractValue(texte, /FERRITINE\s+(\d+)\s/i) || extraire(texte, /Ferritine[^\d-]*([\d,.]+)/i),
         BNP: extraireBNP(texte),
         NTproBNP: extraireNTproBNP(texte),
+        PTH: extrairePTH(texte),
         PSA: extractValue(texte, /PSA\s+(\d+[.,]\d+|\d+)\s/i),
         Li: extraireLiStrict(texte)
     };
@@ -1005,7 +1020,7 @@ function formaterResultat(date, valeurs, heure, cultureComplete) {
         "BiliT", "ALT", "AST", "CK", "GGT", "LDH", "Phosp. Alc", "Lipase", "CRP",
         "CT", "TG", "HDL", "LDL", "non-HDL", "ApoB",
         "TSH", "T4L", "Vit. B12", "Vit. D", "HbA1c", "RAC", "TSAT",
-        "Ferritine", "BNP", "NTproBNP", "PSA", "Li"
+        "Ferritine", "BNP", "NTproBNP", "PTH", "PSA", "Li"
     ];
 
     const resultatsFormates = [];
