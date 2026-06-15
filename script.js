@@ -1156,7 +1156,7 @@ function processRapport(texte) {
     const motifParam = param => new RegExp(param + motifHB + num, "i");
 
     const albumine = extraireAlbumine(texte);
-    const caCorrigeMesure = extraireCaCorrige(texte);
+    const caIonCorrigePh = extraireCaCorrige(texte);
     const calciumTotal = extraireParUnite(
         texte,
         "Calcium(?:\\s+total)?(?!\\s+ion)",
@@ -1195,7 +1195,8 @@ function processRapport(texte) {
         Alb: albumine,
         "Pré-alb": extraireParUnite(texte, "Pr[ée]-albumine", "mg\\/L", /Pr[ée]-albumine[^\d-]*([\d,.]+)\s*mg\/L/i, fb("Pr[ée]-albumine", "mg\\/L")),
         Ca: calciumTotal,
-        "Ca (corr.)": caCorrigeMesure,
+        "Ca (corr.)": null,
+        "Ca ion. pH": caIonCorrigePh,
         "Ca ionisé": extraireCaIonise(texte),
         "Ac. urique": extraireAcideUrique(texte),
         BiliT: extraireBilirubineTotale(texte),
@@ -1249,6 +1250,10 @@ function processRapport(texte) {
         valeurs["Ca (corr.)"] = (ca + 0.02 * (40 - alb)).toFixed(2);
     }
 
+    if (valeurs["Ca ion. pH"]) {
+        delete valeurs["Ca ionisé"];
+    }
+
     const cultureComplete = extraireCultureUrinaireComplete(texte);
     const date = extraireDate(texte);
     const heure = extraireHeurePrelevement(texte);
@@ -1264,7 +1269,7 @@ function formaterDVE(val) {
 function formaterResultat(date, valeurs, heure, cultureComplete) {
     const ordre = [
         "Hb", "VGM", "DVE", "RNI", "Créat", "DFGe", "Urée", "Na", "K", "Cl", "Pi", "Mg",
-        "Alb", "Pré-alb", "Ca", "Ca (corr.)", "Ca ionisé", "Ac. urique",
+        "Alb", "Pré-alb", "Ca", "Ca (corr.)", "Ca ion. pH", "Ca ionisé", "Ac. urique",
         "BiliT", "ALT", "AST", "CK", "GGT", "LDH", "PAL", "Lipase", "CRP",
         "CT", "TG", "HDL", "LDL", "non-HDL", "ApoB",
         "TSH", "T4L", "Prolactine", "TestT", "DHEA", "Vit. B12", "Vit. D", "HbA1c", "RAC",
