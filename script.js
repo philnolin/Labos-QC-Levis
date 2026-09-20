@@ -230,7 +230,7 @@ function extraireDFGe(texte) {
 
     // NOUVEAU : format compact avec code labo à 2 lettres seulement (ex: CHTES01AB) devant la valeur,
     // suivi de la date - couvre les codes labo plus courts (2 lettres + chiffres) que compactCode4/compact
-    let compactCourt = texte.match(/DFG\s*Estim[ée]\/1,73m2\s*\(pr[ée]dite\)\s*mL\/min\s+[A-Z]{2,}\d{2,}(?:AB|AH|AN|CB|CH|XB|XH)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s+20\d{2}\//i);
+    let compactCourt = texte.match(/DFG\s*Estim[ée]\/1,73m2\s*\(pr[ée]dite\)\s*mL\/min\s+[A-Z]{2,}\d{4}([<>]?(?:=)?\d+(?:[.,]\d+)?)\s+20\d{2}\//i);
     if (compactCourt) return normaliserValeur(compactCourt[1]);
 
     let sansCodeAvantUnite = texte.match(/DFG\s*Estim[ée]\/1,73m2\s*\(pr[ée]dite\)\s*([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*mL\/min/i);
@@ -291,6 +291,9 @@ function extraireHb(texte) {
 
 function extraireVGM(texte) {
     const patterns = [
+        // Format avec plage de référence collée avant VGM (ex: "80,0 - 100,0VGM fL AUTOV96,9")
+        /(?:^|\n)\s*(?:[<>]=?\s*)?\d+(?:[.,]\d+)?\s*-\s*(?:[<>]=?\s*)?\d+(?:[.,]\d+)?\s*VGM\s+fL\s+AUTO[VHBCAX]*\s*([<>]?(?:=)?\d+(?:[.,]\d+)?)/i,
+        // Format avec plage + code labo
         /(?:^|\n)\s*(?:[<>]=?\s*)?\d+(?:[.,]\d+)?\s*-\s*(?:[<>]=?\s*)?\d+(?:[.,]\d+)?VGM\s+fL\s+[A-Z]{2,}\d{3,4}(?:AB|AH|AN|CB|CH|XB|XH)?(\d{2,3}(?:[.,]\d+)?)\s+20\d{2}\//i,
         /\bVGM\b\s*(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*fL\b/i,
         /Volume glob\.\s*moyen\s*(?:[HLBA]\s*)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*fL\b/i,
@@ -446,6 +449,97 @@ function extraireLpA(texte) {
     if (m) return normaliserValeur(m[1]);
 
     return extraireFormatCisssInverse(texte, "Lipoprot[ée]ines?\\s*a\\s*\\(Lpa\\)|Lp\\s*\\(a\\)", "nmol\\/L");
+}
+
+function extraireValproate(texte) {
+    let total = null;
+    let libre = null;
+
+    // Format "Acide valproïque 458 μmol/L" (Hôtel-Dieu)
+    let m = texte.match(/Acide\s+valproïque\s+([<>]?(?:=)?\d+(?:[.,]\d+)?)\s*[uµμ]?mol\/L/i);
+    if (m) total = normaliserValeur(m[1]);
+
+    // Format ADM (sans AUTO) pour le total
+    if (!total) {
+        m = texte.match(/(?<!libre\s)Valproate\s+umol\/L\s+ADM([<>]?(?:=)?\d+(?:[.,]\d+)?)\s+20\d{2}\//i);
+        if (m) total = normaliserValeur(m[1]);
+    }
+
+    // Format AUTO pour le total
+    if (!total) {
+        m = texte.match(/(?<!libre\s)Valproate\s+umol\/L\s+AUTO[VHBCAX\/]*\s*([<>]?(?:=)?\d+(?:[.,]\d+)?)\s+20\d{2}\//i);
+        if (m) total = normaliserValeur(m[1]);
+    }
+
+    // Format avec code labo standard
+    if (!total) {
+        m = texte.match(/(?<!libre\s)Valproate\s+umol\/L\s+[A-Z]{2,}\d{2,}(?:AB|AH|AN|CB|CH|XB|XH)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s+20\d{2}\//i);
+        if (m) total = normaliserValeur(m[1]);
+    }
+
+    // Format ADMAH pour le libre
+    m = texte.match(/Valproate\s+libre\s+umol\/L\s+ADM(AH)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s+20\d{2}\//i);
+    if (m) libre = normaliserValeur(m[2] || m[1]);
+
+    // Format AUTO pour le libre
+    if (!libre) {
+        m = texte.match(/Valproate\s+libre\s+umol\/L\s+AUTO[VHBCAX\/]*\s*([<>]?(?:=)?\d+(?:[.,]\d+)?)\s+20\d{2}\//i);
+        if (m) libre = normaliserValeur(m[1]);
+    }
+
+    // Format avec code labo standard pour le libre
+    if (!libre) {
+        m = texte.match(/Valproate\s+libre\s+umol\/L\s+[A-Z]{2,}\d{2,}(?:AB|AH|AN|CB|CH|XB|XH)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s+20\d{2}\//i);
+        if (m) libre = normaliserValeur(m[1]);
+    }
+
+    if (!total && !libre) return null;
+
+    let resultat = "";
+    if (total) resultat += `total: ${total}`;
+    if (libre) resultat += `${resultat ? ", " : ""}Libre ${libre}`;
+
+    return resultat || null;
+}
+
+function extraireHeurePrelevement(texte) {
+    // Format: "Prélevé le 2025/11/11 à 08h15m" (prioritaire) — accepte année 2 ou 4 chiffres
+    let m = texte.match(/Pr[ée]lev[ée]\s+le\s+\d{2,4}\/\d{2}\/\d{2}\s+à\s+(\d{1,2})h(\d{2})m/i);
+    if (m) return `${m[1].padStart(2, "0")}h${m[2]}`;
+
+    // Format: "Prélevé le 26/08/07 09:00" (sans le "m")
+    m = texte.match(/Pr[ée]lev[ée]\s+le\s+\d{2,4}\/\d{2}\/\d{2}\s+(\d{1,2}):(\d{2})/i);
+    if (m) return `${m[1].padStart(2, "0")}h${m[2]}`;
+
+    // Format: "SPÉCIMEN Tube lavande PRÉLEVÉ le 26/08/07 09:00 PAR CBE0777"
+    m = texte.match(/SP[ÉE]CIMEN[^\n]*PR[ÉE]LEV[ÉE]\s+le\s+\d{2,4}\/\d{2}\/\d{2}\s+(\d{1,2}):(\d{2})/i);
+    if (m) return `${m[1].padStart(2, "0")}h${m[2]}`;
+
+    // Fallback: "Enregistré" seulement si "Prélevé" n'a pas été trouvé
+    m = texte.match(/Enregistré\s+le\s+\d{2,4}\/\d{2}\/\d{2}\s+à\s+(\d{1,2})h(\d{2})m/i);
+    if (m) return `${m[1].padStart(2, "0")}h${m[2]}`;
+
+    // Dernier recours
+    m = texte.match(/(\d{1,2})[h:](\d{2})/);
+    if (m) return `${m[1].padStart(2, "0")}h${m[2].padStart(2, "0")}`;
+
+    return null;
+}
+
+function extraireHeureValproate(texte) {
+    // Chercher SPECIFIQUEMENT "Prélevé le" (année 2 ou 4 chiffres)
+    let m = texte.match(/Pr[ée]lev[ée]\s+le\s+\d{2,4}\/\d{2}\/\d{2}\s+à\s+(\d{1,2})h(\d{2})m/i);
+    if (m) return `${m[1].padStart(2, "0")}h${m[2]}`;
+
+    // Format: "Prélevé le 26/08/07 09:00" (sans le "m")
+    m = texte.match(/Pr[ée]lev[ée]\s+le\s+\d{2,4}\/\d{2}\/\d{2}\s+(\d{1,2}):(\d{2})/i);
+    if (m) return `${m[1].padStart(2, "0")}h${m[2]}`;
+
+    // Format: "SPÉCIMEN Tube or PRÉLEVÉ le 26/08/07 09:00"
+    m = texte.match(/SP[ÉE]CIMEN[^\n]*PR[ÉE]LEV[ÉE]\s+le\s+\d{2,4}\/\d{2}\/\d{2}\s+(\d{1,2}):(\d{2})/i);
+    if (m) return `${m[1].padStart(2, "0")}h${m[2]}`;
+    
+    return null;
 }
 
 function extraireA1c(texte) {
@@ -960,8 +1054,13 @@ function extraireDVE(texte) {
 }
 
 function extrairePhosphate(texte) {
-    const compact = texte.match(/Phosph(?:ate|ore)\s+mmol\/L\s+[A-Z]{2,}\d{3,}?(?:AB|AH|AN|CB|CH|XB|XH)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s+20\d{2}\//i);
+    // Code labo = lettres + EXACTEMENT 4 chiffres (ex: CAT0711), valeur collée directement
+    const compact = texte.match(/Phosph(?:ate|ore)\s+mmol\/L\s+[A-Z]{2,}\d{4}(?:AB|AH|AN|CB|CH|XB|XH)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s+20\d{2}\//i);
     if (compact) return normaliserValeur(compact[1]);
+
+    // Code labo = lettres + 2 chiffres (ex: AH1) — filet de sécurité
+    const compactCourt = texte.match(/Phosph(?:ate|ore)\s+mmol\/L\s+[A-Z]{2,}\d{2,3}(?:AB|AH|AN|CB|CH|XB|XH)?([<>]?(?:=)?\d+(?:[.,]\d+)?)\s+20\d{2}\//i);
+    if (compactCourt) return normaliserValeur(compactCourt[1]);
 
     return extractValue(texte, /Phosph(?:ate|ore)\s+mmol\/L[^\n]*?AUTO[VHBCAX]*\s*([<>]?(?:=)?\d+(?:[.,]\d+)?)/i) ||
         extraireFormatCisssInverse(texte, "Phosph(?:ate|ore)|PHOSPHORE", "mmol\\/L") ||
@@ -970,7 +1069,6 @@ function extrairePhosphate(texte) {
         extractValue(texte, /Phosph(?:ate|ore)\s+(?:[HLBA]\s*)?(\d+[.,]\d+|\d+)\s*mmol\/L/i) ||
         extractValue(texte, /PHOSPHORE\s+(\d+[.,]\d+|\d+)\s/i);
 }
-
 function extrairePotassium(texte) {
     return extraireFormatCisssInverse(texte, "Potassium|POTASSIUM", "mmol\\/L") ||
         extractValue(texte, /Potassium\s+mmol\/L\s+[A-Z]{2,}\d{4}(?:AB|AH|AN|CB|CH|XB|XH)?([<>]?(?:=)?\d{1,3}(?:[.,]\d+)?)\s+20\d{2}\//i) ||
@@ -1729,14 +1827,26 @@ function extraireDate(texte) {
 }
 
 function extraireHeurePrelevement(texte) {
-    let m = texte.match(/(?:Prélevé\s*le|Prélevée\s*le|Enregistré\s*le)[\s\S]*?\s*à\s*(\d{2})h(\d{2})m/i);
-    if (m) return `${m[1]}h${m[2]}`;
+    // Format: "Prélevé le 2025/11/11 à 08h15m" — accepte année 2 ou 4 chiffres (prioritaire)
+    let m = texte.match(/Pr[ée]lev[ée]\s+le\s+\d{2,4}\/\d{2}\/\d{2}\s+à\s+(\d{1,2})h(\d{2})m/i);
+    if (m) return `${m[1].padStart(2, "0")}h${m[2]}`;
 
-    m = texte.match(/(?:Prélevé\s*le|Prélevée\s*le|Enregistré\s*le)[\s\S]*?\s*(\d{2}):(\d{2})(?::\d{2})?/i);
-    if (m) return `${m[1]}h${m[2]}`;
+    // Format: "Prélevé le 26/08/07 09:00"
+    m = texte.match(/Pr[ée]lev[ée]\s+le\s+\d{2,4}\/\d{2}\/\d{2}\s+(\d{1,2}):(\d{2})/i);
+    if (m) return `${m[1].padStart(2, "0")}h${m[2]}`;
+
+    // Préférer explicitement "Prélevé" avant "Enregistré" dans le fallback large
+    m = texte.match(/Pr[ée]lev[ée]e?\s*le[\s\S]*?\s*à\s*(\d{1,2})h(\d{2})m/i);
+    if (m) return `${m[1].padStart(2, "0")}h${m[2]}`;
+
+    m = texte.match(/(?:Prélevé\s*le|Prélevée\s*le|Enregistré\s*le)[\s\S]*?\s*à\s*(\d{1,2})h(\d{2})m/i);
+    if (m) return `${m[1].padStart(2, "0")}h${m[2]}`;
+
+    m = texte.match(/(?:Prélevé\s*le|Prélevée\s*le|Enregistré\s*le)[\s\S]*?\s*(\d{1,2}):(\d{2})(?::\d{2})?/i);
+    if (m) return `${m[1].padStart(2, "0")}h${m[2]}`;
 
     const shortText = texte.substring(0, 500);
-    m = shortText.match(/(?:Prélevée\s+(?:le\s+\d{4}[-/]\d{2}[-/]\d{2}\s+)?(?:à\s+)?|Heure:\s*)(\d{1,2})[h:](\d{2})/i);
+    m = shortText.match(/(?:Prélevée\s+(?:le\s+\d{2,4}[-/]\d{2}[-/]\d{2}\s+)?(?:à\s+)?|Heure:\s*)(\d{1,2})[h:](\d{2})/i);
     if (m) return `${m[1].padStart(2, "0")}h${m[2].padStart(2, "0")}`;
 
     m = texte.match(/(\d{1,2})[h:](\d{2})/);
@@ -1771,7 +1881,9 @@ Hb: extraireHb(texte) ||
     extraireParUnite(texte, "Hb|Hémoglobine", "g\\/L", /(?:Hb|H[ée]moglobine)\s+(\d+)\s/i, fb("Hb|Hémoglobine", "g\\/L")) ||
     extraireFormatCompactRef(texte, "Hb|Hémoglobine", "g\\/L") ||
     extractValue(texte, /(?:Hb|H[ée]moglobine)\s+(\d+)\s/i),
-
+Plaq: extraire(texte, /Plaq\.?\s+(\d+)\s+10\*9\/L/i) ||
+      extraire(texte, /Plaq\s+10\*9\/L\s+AUTOV[AB]*\s*(\d+)/i) ||
+      extraire(texte, /Plaq\s+10\*9\/L.*?\s*(\d+)/i),
 VGM: extraireVGM(texte),
         DVE: extraireDVE(texte),
         RNI: extraireRNI(texte),
@@ -1840,9 +1952,10 @@ LpA: extraireLpA(texte),
         NTproBNP: extraireNTproBNP(texte),
         PTH: extrairePTH(texte),
         PSA: extrairePSA(texte),
-        Li: extraireLiStrict(texte)
+        Li: extraireLiStrict(texte),
+        Valproate: extraireValproate(texte)
     };
-
+   
     const suffixeHemolysePotassium = extraireHemolysePotassium(texte);
     if (valeurs.K && suffixeHemolysePotassium && !String(valeurs.K).endsWith(suffixeHemolysePotassium)) {
         valeurs.K = `${valeurs.K}${suffixeHemolysePotassium}`;
@@ -1860,11 +1973,15 @@ LpA: extraireLpA(texte),
         delete valeurs["Ca ionisé"];
     }
 
-    const cultureComplete = extraireCultureUrinaireComplete(texte);
-    const date = extraireDate(texte);
-    const heure = extraireHeurePrelevement(texte);
+const cultureComplete = extraireCultureUrinaireComplete(texte);
+const date = extraireDate(texte);
+const heure = extraireHeurePrelevement(texte);
 
-    return formaterResultat(date, valeurs, heure, cultureComplete);
+if (valeurs.Valproate) {
+    valeurs.HeureValproate = extraireHeureValproate(texte);
+}
+
+return formaterResultat(date, valeurs, heure, cultureComplete);
 }
 
 function formaterDVE(val) {
@@ -1874,7 +1991,7 @@ function formaterDVE(val) {
 
 function formaterResultat(date, valeurs, heure, cultureComplete) {
     const ordre = [
-        "Hb", "VGM", "DVE", "RNI", "Créat", "DFGe", "Urée", "Na", "K", "Cl", "Pi", "Mg",
+        "Hb", "Plaq","VGM", "DVE", "RNI", "Créat", "DFGe", "Urée", "Na", "K", "Cl", "Pi", "Mg",
         "Alb", "Pré-alb", "Ca", "Ca (corr.)", "Ca ion. pH", "Ca ionisé", "Ac. urique",
         "BiliT", "ALT", "AST", "CK", "GGT", "LDH", "PAL", "Lipase", "CRP",
         "CT", "TG", "HDL", "LDL", "non-HDL", "ApoB", "LpA",
@@ -1901,6 +2018,19 @@ function formaterResultat(date, valeurs, heure, cultureComplete) {
 
     if (cultureComplete && cultureComplete.texte) {
         res += `\n${cultureComplete.texte}`;
+    }
+
+    if (valeurs.Valproate) {
+        const valproateStr = valeurs.Valproate;
+        // Utiliser l'heure spécifique du Valproate si elle existe, sinon l'heure générale
+        const heureValproate = valeurs.HeureValproate || heure;
+        let heureFormatee = heureValproate || "9h00";
+        if (heureFormatee) {
+            heureFormatee = heureFormatee.replace(/^(\d{1,2})h(\d{2})$/, (_, h, m) => {
+                return `${h.padStart(2, "0")}h${m.padStart(2, "0")}`;
+            });
+        }
+        res += `\nAcide Valproïque ${valproateStr} (prélevé à ${heureFormatee})`;
     }
 
     return res;
