@@ -8,7 +8,11 @@ document.addEventListener("DOMContentLoaded", () => {
 function extraireLabos() {
     const texte = document.getElementById("inputRapport").value;
     const resultat = processRapport(texte);
-    document.getElementById("resultats").textContent = resultat;
+    const sortie = document.getElementById("resultats");
+    sortie.textContent = resultat;
+    sortie.hidden = false;
+    const vide = document.getElementById("resultEmpty");
+    if (vide) vide.hidden = true;
     copierPressePapiers(resultat);
 }
 
